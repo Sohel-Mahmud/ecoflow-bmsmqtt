@@ -11,6 +11,9 @@ import 'storage_service.dart';
 
 const _tag = 'MqttService';
 
+// Fixed device UID used in MQTT clientId (matches Postman/working setup)
+const _deviceUid = '7F8A9B2C-3D4E-4F5A-8B9C-1D2E3F4A5B6C';
+
 enum MqttConnectionState { disconnected, connecting, connected, error }
 
 class MqttService extends ChangeNotifier {
@@ -22,13 +25,18 @@ class MqttService extends ChangeNotifier {
   MqttConnectionState _connectionState = MqttConnectionState.disconnected;
   MqttConnectionState get connectionState => _connectionState;
 
+  int _packetCount = 0;
+
   final _rawPacketsController = StreamController<Uint8List>.broadcast();
   Stream<Uint8List> get rawPackets => _rawPacketsController.stream;
 
   Future<void> connect(String serialNumber) async {
+    debugPrint('[$_tag] connect() called for sn=$serialNumber');
     final mqttUser = await _storage.getMqttUsername();
     final mqttPass = await _storage.getMqttPassword();
     final userId = _storage.userId;
+
+    log('[$_tag] mqttUser=$mqttUser mqttPass=$mqttPass userId=$userId');
 
     if (mqttUser == null || mqttPass == null || userId == null) {
       _connectionState = MqttConnectionState.error;
@@ -40,18 +48,17 @@ class MqttService extends ChangeNotifier {
     final port = _storage.mqttPort ?? ApiConstants.mqttPort;
     final protocol = _storage.mqttProtocol ?? 'mqtts';
 
-    // clientId pattern: ANDROID_{UUID_UPPERCASE}_{userId}
-    final uuid = _generateUuidV4().toUpperCase().replaceAll('-', '');
-    final clientId = 'ANDROID_${uuid}_$userId';
+    // clientId pattern: ANDROID_{UID}_{userId}
+    final clientId = 'ANDROID_${_deviceUid}_$userId';
 
-    log(
-      'connect() host=$host port=$port protocol=$protocol clientId=$clientId',
-      name: _tag,
+    debugPrint(
+      '[$_tag] connect() host=$host port=$port protocol=$protocol clientId=$clientId',
     );
 
     _client = MqttServerClient.withPort(host, clientId, port)
       ..secure = protocol == 'mqtts'
       ..keepAlivePeriod = 60
+      ..secure = true
       ..connectTimeoutPeriod = 15000
       ..onDisconnected = _onDisconnected
       ..onConnected = _onConnected
@@ -62,7 +69,7 @@ class MqttService extends ChangeNotifier {
     _client!.connectionMessage = MqttConnectMessage()
         .withClientIdentifier(clientId)
         .authenticateAs(mqttUser, mqttPass)
-        .withWillQos(MqttQos.atLeastOnce)
+        .withWillQos(MqttQos.atMostOnce)
         .startClean();
 
     _connectionState = MqttConnectionState.connecting;
@@ -71,16 +78,15 @@ class MqttService extends ChangeNotifier {
     try {
       await _client!.connect();
     } catch (e) {
-      log('connect() error: $e', name: _tag);
+      debugPrint('[$_tag] connect() error: $e');
       _connectionState = MqttConnectionState.error;
       notifyListeners();
       rethrow;
     }
 
     final status = _client!.connectionStatus;
-    log(
-      'connection status: ${status?.state} returnCode=${status?.returnCode}',
-      name: _tag,
+    debugPrint(
+      '[$_tag] connection status: ${status?.state} returnCode=${status?.returnCode}',
     );
 
     if (status?.returnCode != MqttConnectReturnCode.connectionAccepted) {
@@ -93,13 +99,18 @@ class MqttService extends ChangeNotifier {
 
     final topic = ApiConstants.mqttTopic(serialNumber);
     _client!.subscribe(topic, MqttQos.atLeastOnce);
-    log('subscribed to $topic', name: _tag);
+    debugPrint('[$_tag] subscribed to $topic');
 
+    _packetCount = 0;
+    debugPrint('[$_tag] registering updates listener');
     _client!.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
       for (final msg in messages) {
         final pub = msg.payload as MqttPublishMessage;
         final bytes = Uint8List.fromList(pub.payload.message.toList());
-        log('packet received: ${bytes.length} bytes', name: _tag);
+        _packetCount++;
+        debugPrint(
+          '[$_tag] *** PACKET #$_packetCount arrived: ${bytes.length} bytes on ${msg.topic} ***',
+        );
         if (!_rawPacketsController.isClosed) {
           _rawPacketsController.add(bytes);
         }
@@ -110,16 +121,15 @@ class MqttService extends ChangeNotifier {
   void _onConnected() {
     _connectionState = MqttConnectionState.connected;
     notifyListeners();
-    log(
-      'connected to ${_storage.mqttHost ?? ApiConstants.mqttHost}',
-      name: _tag,
+    debugPrint(
+      '[$_tag] connected to ${_storage.mqttHost ?? ApiConstants.mqttHost}',
     );
   }
 
   void _onDisconnected() {
     _connectionState = MqttConnectionState.disconnected;
     notifyListeners();
-    log('disconnected', name: _tag);
+    debugPrint('[$_tag] disconnected');
   }
 
   Future<void> disconnect() async {
@@ -134,21 +144,5 @@ class MqttService extends ChangeNotifier {
     _client?.disconnect();
     _rawPacketsController.close();
     super.dispose();
-  }
-
-  // Simple UUID v4 generator (no external dep needed)
-  String _generateUuidV4() {
-    const chars = '0123456789abcdef';
-    final rng = DateTime.now().microsecondsSinceEpoch;
-    final buf = StringBuffer();
-    var seed = rng;
-    for (var i = 0; i < 32; i++) {
-      seed =
-          (seed * 6364136223846793005 + 1442695040888963407) &
-          0xFFFFFFFFFFFFFFFF;
-      buf.write(chars[(seed >> (i % 8) * 4) & 0xF]);
-      if (i == 7 || i == 11 || i == 15 || i == 19) buf.write('-');
-    }
-    return buf.toString();
   }
 }

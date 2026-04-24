@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:developer';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../core/constants/api_constants.dart';
 import 'storage_service.dart';
@@ -23,9 +23,8 @@ class AuthService {
 
   /// Login, store JWT + userId, then fetch MQTT certs.
   Future<void> login({required String email, required String password}) async {
-    log(
-      'login() → POST ${ApiConstants.baseUrl}${ApiConstants.loginPath}',
-      name: _tag,
+    debugPrint(
+      '[$_tag] login() → POST ${ApiConstants.baseUrl}${ApiConstants.loginPath}',
     );
 
     final Response<dynamic> loginResp = await _dio.post(
@@ -43,27 +42,27 @@ class AuthService {
       options: Options(contentType: Headers.jsonContentType),
     );
 
-    log(
-      'login response: code=${_code(loginResp.data)} '
-      'status=${loginResp.statusCode}',
-      name: _tag,
+    debugPrint(
+      '[$_tag] login response: code=${_code(loginResp.data)} status=${loginResp.statusCode}',
     );
 
     final loginData = _dataMap(loginResp.data);
     if (loginData == null) {
-      log('login failed — data field missing in response', name: _tag);
+      debugPrint('[$_tag] login failed — data field missing in response');
       throw const AuthException('Invalid login response');
     }
 
     final token = loginData['token'] as String?;
     final userMap = loginData['user'] as Map?;
+    // EcoFlow API may return id under user.userId, user.id, or top-level id
     final userId =
-        userMap?['userId']?.toString() ?? loginData['userId']?.toString();
+        userMap?['userId']?.toString() ??
+        userMap?['id']?.toString() ??
+        loginData['userId']?.toString() ??
+        loginData['id']?.toString();
 
-    log(
-      'login parsed: token=${token != null ? "[present]" : "null"} '
-      'userId=$userId',
-      name: _tag,
+    debugPrint(
+      '[$_tag] login parsed: token=${token != null ? "[present]" : "null"} userId=$userId',
     );
 
     if (token == null || token.isEmpty) {
@@ -80,14 +79,13 @@ class AuthService {
       _storage.setPassword(password),
     ]);
 
-    log('credentials stored, fetching MQTT certification', name: _tag);
+    debugPrint('[$_tag] credentials stored, fetching MQTT certification');
     await _fetchCertification(token);
   }
 
   Future<void> _fetchCertification(String token) async {
-    log(
-      '_fetchCertification() → GET ${ApiConstants.baseUrl}${ApiConstants.certPath}',
-      name: _tag,
+    debugPrint(
+      '[$_tag] _fetchCertification() → GET ${ApiConstants.baseUrl}${ApiConstants.certPath}',
     );
 
     final Response<dynamic> certResp = await _dio.get(
@@ -95,15 +93,13 @@ class AuthService {
       options: Options(headers: {'Authorization': 'Bearer $token'}),
     );
 
-    log(
-      'cert response: code=${_code(certResp.data)} '
-      'status=${certResp.statusCode}',
-      name: _tag,
+    debugPrint(
+      '[$_tag] cert response: code=${_code(certResp.data)} status=${certResp.statusCode}',
     );
 
     final certData = _dataMap(certResp.data);
     if (certData == null) {
-      log('cert failed — data field missing in response', name: _tag);
+      debugPrint('[$_tag] cert failed — data field missing in response');
       throw const AuthException('Invalid certification response');
     }
 
@@ -113,10 +109,8 @@ class AuthService {
     final mqttPortStr = certData['port']?.toString();
     final mqttProtocol = certData['protocol'] as String?;
 
-    log(
-      'cert parsed: url=$mqttUrl port=$mqttPortStr protocol=$mqttProtocol '
-      'account=${mqttUser != null ? "[present]" : "null"}',
-      name: _tag,
+    debugPrint(
+      '[$_tag] cert parsed: url=$mqttUrl port=$mqttPortStr protocol=$mqttProtocol account=${mqttUser != null ? "[present]" : "null"}',
     );
 
     if (mqttUser == null || mqttPass == null) {
@@ -138,7 +132,7 @@ class AuthService {
       saves.add(_storage.setMqttProtocol(mqttProtocol));
     }
     await Future.wait(saves);
-    log('MQTT config stored', name: _tag);
+    debugPrint('[$_tag] MQTT config stored');
   }
 
   Future<bool> isLoggedIn() async {

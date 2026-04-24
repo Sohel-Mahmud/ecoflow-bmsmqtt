@@ -1,9 +1,11 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/models/device_telemetry_model.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../features/auth/viewmodel/auth_viewmodel.dart';
 import '../../../services/mqtt_service.dart';
 import '../viewmodel/dashboard_viewmodel.dart';
 import 'widgets/idle_banner.dart';
@@ -86,10 +88,18 @@ class _DashboardBody extends StatelessWidget {
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh),
-          tooltip: 'Reconnect',
-          onPressed: () {
-            /* TODO: trigger reconnect */
+          icon: const Icon(Icons.link_off),
+          tooltip: 'Disconnect MQTT',
+          onPressed: () async {
+            await context.read<MqttService>().disconnect();
+          },
+        ),
+        IconButton(
+          icon: const Icon(Icons.logout),
+          tooltip: 'Logout',
+          onPressed: () async {
+            await context.read<AuthViewModel>().logout();
+            if (context.mounted) context.go('/login');
           },
         ),
       ],

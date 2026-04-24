@@ -33,7 +33,7 @@ class KpiCard extends StatelessWidget {
             label,
             style: const TextStyle(
               color: AppTheme.textSecondary,
-              fontSize: 10,
+              fontSize: 12,
               letterSpacing: 0.5,
             ),
             maxLines: 1,
@@ -48,7 +48,7 @@ class KpiCard extends StatelessWidget {
                   value,
                   style: TextStyle(
                     color: accentColor,
-                    fontSize: 18,
+                    fontSize: 22,
                     fontWeight: FontWeight.w700,
                     height: 1,
                   ),
@@ -64,7 +64,7 @@ class KpiCard extends StatelessWidget {
                     unit,
                     style: const TextStyle(
                       color: AppTheme.textSecondary,
-                      fontSize: 11,
+                      fontSize: 13,
                     ),
                   ),
                 ),

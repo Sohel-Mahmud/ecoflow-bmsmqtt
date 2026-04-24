@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import '../../../services/auth_service.dart';
+import '../../../services/mqtt_service.dart';
 import '../../../services/storage_service.dart';
 
 class SplashView extends StatefulWidget {
@@ -32,6 +34,13 @@ class _SplashViewState extends State<SplashView> {
     if (!mounted) return;
 
     if (loggedIn && sn != null && sn.isNotEmpty) {
+      // Reconnect MQTT — not connected yet on fresh launch
+      try {
+        await context.read<MqttService>().connect(sn);
+      } catch (e) {
+        debugPrint('[SplashView] MQTT auto-connect failed: $e');
+      }
+      if (!mounted) return;
       context.go('/dashboard');
     } else {
       context.go('/login');

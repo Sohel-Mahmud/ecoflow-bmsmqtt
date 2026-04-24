@@ -48,4 +48,9 @@ class AuthViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> logout() async {
+    await _mqttService.disconnect();
+    await _storage.clearAll();
+  }
 }

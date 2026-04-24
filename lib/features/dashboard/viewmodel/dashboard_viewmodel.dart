@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer';
 import 'dart:typed_data';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -56,7 +55,7 @@ class DashboardViewModel extends ChangeNotifier {
   final List<FlSpot> battAmpHistory = [];
 
   void _onRawPacket(Uint8List bytes) {
-    log('packet arrived: ${bytes.length} bytes', name: _tag);
+    debugPrint('[$_tag] packet arrived: ${bytes.length} bytes');
 
     // Reset idle timer on ANY packet — even if decode fails
     _resetIdleTimer();
@@ -67,11 +66,11 @@ class DashboardViewModel extends ChangeNotifier {
 
     final fields = _decoder.decode(bytes);
     if (fields == null) {
-      log('decode returned null — skipping telemetry update', name: _tag);
+      debugPrint('[$_tag] decode returned null — skipping telemetry update');
       return;
     }
 
-    log('decoded fields: ${fields.keys.join(", ")}', name: _tag);
+    debugPrint('[$_tag] decoded fields: ${fields.keys.join(", ")}');
     _telemetry = DeviceTelemetryModel.merge(_telemetry, fields);
     _appendChartPoints();
     notifyListeners();
