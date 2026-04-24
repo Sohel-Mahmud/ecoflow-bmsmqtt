@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:typed_data';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -7,6 +8,8 @@ import 'package:flutter/foundation.dart';
 import '../../../core/models/device_telemetry_model.dart';
 import '../../../services/mqtt_service.dart';
 import '../../../services/proto_decoder_service.dart';
+
+const _tag = 'DashboardVM';
 
 class DashboardViewModel extends ChangeNotifier {
   DashboardViewModel({
@@ -53,17 +56,24 @@ class DashboardViewModel extends ChangeNotifier {
   final List<FlSpot> battAmpHistory = [];
 
   void _onRawPacket(Uint8List bytes) {
-    final fields = _decoder.decode(bytes);
-    if (fields == null) return;
+    log('packet arrived: ${bytes.length} bytes', name: _tag);
 
-    _telemetry = DeviceTelemetryModel.merge(_telemetry, fields);
-    _appendChartPoints();
+    // Reset idle timer on ANY packet — even if decode fails
     _resetIdleTimer();
-
     if (_isStreamIdle) {
       _isStreamIdle = false;
+      notifyListeners();
     }
 
+    final fields = _decoder.decode(bytes);
+    if (fields == null) {
+      log('decode returned null — skipping telemetry update', name: _tag);
+      return;
+    }
+
+    log('decoded fields: ${fields.keys.join(", ")}', name: _tag);
+    _telemetry = DeviceTelemetryModel.merge(_telemetry, fields);
+    _appendChartPoints();
     notifyListeners();
   }
 

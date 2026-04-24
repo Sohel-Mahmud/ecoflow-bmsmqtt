@@ -1,7 +1,10 @@
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:typed_data';
 
 import '../proto/generated/ef_delta3.pb.dart';
+
+const _tag = 'ProtoDecoder';
 
 class ProtoDecoderService {
   const ProtoDecoderService();
@@ -13,6 +16,10 @@ class ProtoDecoderService {
     try {
       final decoded = base64.decode(String.fromCharCodes(rawBytes));
       bytes = Uint8List.fromList(decoded);
+      log(
+        'base64 unwrapped: ${rawBytes.length}→${bytes.length} bytes',
+        name: _tag,
+      );
     } catch (_) {
       bytes = rawBytes;
     }
@@ -21,15 +28,29 @@ class ProtoDecoderService {
     Delta3HeaderMessage envelope;
     try {
       envelope = Delta3HeaderMessage.fromBuffer(bytes);
-    } catch (_) {
+    } catch (e) {
+      log('envelope parse failed: $e', name: _tag);
       return null;
     }
 
-    if (envelope.header.isEmpty) return null;
+    if (envelope.header.isEmpty) {
+      log('envelope parsed but header list is empty', name: _tag);
+      return null;
+    }
 
+    log('envelope has ${envelope.header.length} header(s)', name: _tag);
     final result = <String, dynamic>{};
 
     for (final header in envelope.header) {
+      final cmdFunc = header.hasCmdFunc() ? header.cmdFunc : -1;
+      final cmdId = header.hasCmdId() ? header.cmdId : -1;
+      log(
+        'header: cmdFunc=$cmdFunc cmdId=$cmdId src=${header.hasSrc() ? header.src : "?"} '
+        'encType=${header.hasEncType() ? header.encType : "?"} '
+        'pdata=${header.hasPdata() ? header.pdata.length : 0} bytes',
+        name: _tag,
+      );
+
       if (!header.hasPdata()) continue;
 
       // 3. XOR decode if needed
@@ -40,15 +61,19 @@ class ProtoDecoderService {
           header.src != 32) {
         final seq = header.hasSeq() ? (header.seq & 0xFF) : 0;
         pdata = Uint8List.fromList(pdata.map((b) => b ^ seq).toList());
+        log('XOR decoded pdata with seq=$seq', name: _tag);
       }
 
       // 4. Route by (cmdFunc, cmdId)
-      final cmdFunc = header.hasCmdFunc() ? header.cmdFunc : -1;
-      final cmdId = header.hasCmdId() ? header.cmdId : -1;
-
       final decoded = _route(cmdFunc, cmdId, pdata);
       if (decoded != null) {
+        log(
+          'routed ($cmdFunc,$cmdId) → ${decoded.keys.length} fields',
+          name: _tag,
+        );
         result.addAll(decoded);
+      } else {
+        log('no route matched for ($cmdFunc,$cmdId)', name: _tag);
       }
     }
 
@@ -74,8 +99,8 @@ class ProtoDecoderService {
           return _bmsHeartbeatToMap(bms);
         }
       }
-    } catch (_) {
-      // Silently skip undecodable packets
+    } catch (e) {
+      log('_route($cmdFunc,$cmdId) parse error: $e', name: _tag);
     }
     return null;
   }

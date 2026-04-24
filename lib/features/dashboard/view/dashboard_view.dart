@@ -15,23 +15,26 @@ class DashboardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Selector<DashboardViewModel, bool>(
-        selector: (_, vm) => vm.isStreamIdle,
-        builder: (context, isIdle, _) {
-          return Column(
-            children: [
-              IdleBanner(visible: isIdle),
-              Expanded(
-                child: AnimatedOpacity(
-                  opacity: isIdle ? 0.5 : 1.0,
-                  duration: const Duration(milliseconds: 600),
-                  child: const _DashboardBody(),
+    return SafeArea(
+      bottom: false,
+      child: Scaffold(
+        body: Selector<DashboardViewModel, bool>(
+          selector: (_, vm) => vm.isStreamIdle,
+          builder: (context, isIdle, _) {
+            return Column(
+              children: [
+                IdleBanner(visible: isIdle),
+                Expanded(
+                  child: AnimatedOpacity(
+                    opacity: isIdle ? 0.5 : 1.0,
+                    duration: const Duration(milliseconds: 600),
+                    child: const _DashboardBody(),
+                  ),
                 ),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }
