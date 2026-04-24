@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,8 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 
 import '../core/constants/api_constants.dart';
 import 'storage_service.dart';
+
+const _tag = 'MqttService';
 
 enum MqttConnectionState { disconnected, connecting, connected, error }
 
@@ -33,21 +36,28 @@ class MqttService extends ChangeNotifier {
       throw StateError('Missing MQTT credentials or userId');
     }
 
+    final host = _storage.mqttHost ?? ApiConstants.mqttHost;
+    final port = _storage.mqttPort ?? ApiConstants.mqttPort;
+    final protocol = _storage.mqttProtocol ?? 'mqtts';
+
     // clientId pattern: ANDROID_{UUID_UPPERCASE}_{userId}
     final uuid = _generateUuidV4().toUpperCase().replaceAll('-', '');
     final clientId = 'ANDROID_${uuid}_$userId';
 
-    _client =
-        MqttServerClient.withPort(
-            ApiConstants.mqttHost,
-            clientId,
-            ApiConstants.mqttPort,
-          )
-          ..secure = true
-          ..keepAlivePeriod = 60
-          ..onDisconnected = _onDisconnected
-          ..onConnected = _onConnected
-          ..logging(on: kDebugMode);
+    log(
+      'connect() host=$host port=$port protocol=$protocol clientId=$clientId',
+      name: _tag,
+    );
+
+    _client = MqttServerClient.withPort(host, clientId, port)
+      ..secure = protocol == 'mqtts'
+      ..keepAlivePeriod = 60
+      ..connectTimeoutPeriod = 15000
+      ..onDisconnected = _onDisconnected
+      ..onConnected = _onConnected
+      ..logging(on: kDebugMode);
+    _client!.onBadCertificate = (Object _) => true;
+    _client!.setProtocolV311();
 
     _client!.connectionMessage = MqttConnectMessage()
         .withClientIdentifier(clientId)
@@ -61,19 +71,35 @@ class MqttService extends ChangeNotifier {
     try {
       await _client!.connect();
     } catch (e) {
+      log('connect() error: $e', name: _tag);
       _connectionState = MqttConnectionState.error;
       notifyListeners();
       rethrow;
     }
 
+    final status = _client!.connectionStatus;
+    log(
+      'connection status: ${status?.state} returnCode=${status?.returnCode}',
+      name: _tag,
+    );
+
+    if (status?.returnCode != MqttConnectReturnCode.connectionAccepted) {
+      _connectionState = MqttConnectionState.error;
+      notifyListeners();
+      throw StateError(
+        'MQTT connection failed: ${status?.state} (${status?.returnCode})',
+      );
+    }
+
     final topic = ApiConstants.mqttTopic(serialNumber);
     _client!.subscribe(topic, MqttQos.atLeastOnce);
-    debugPrint('[MQTT] Subscribed to $topic');
+    log('subscribed to $topic', name: _tag);
 
     _client!.updates?.listen((List<MqttReceivedMessage<MqttMessage>> messages) {
       for (final msg in messages) {
         final pub = msg.payload as MqttPublishMessage;
         final bytes = Uint8List.fromList(pub.payload.message.toList());
+        log('packet received: ${bytes.length} bytes', name: _tag);
         if (!_rawPacketsController.isClosed) {
           _rawPacketsController.add(bytes);
         }
@@ -84,13 +110,16 @@ class MqttService extends ChangeNotifier {
   void _onConnected() {
     _connectionState = MqttConnectionState.connected;
     notifyListeners();
-    debugPrint('[MQTT] Connected to ${ApiConstants.mqttHost}');
+    log(
+      'connected to ${_storage.mqttHost ?? ApiConstants.mqttHost}',
+      name: _tag,
+    );
   }
 
   void _onDisconnected() {
     _connectionState = MqttConnectionState.disconnected;
     notifyListeners();
-    debugPrint('[MQTT] Disconnected');
+    log('disconnected', name: _tag);
   }
 
   Future<void> disconnect() async {

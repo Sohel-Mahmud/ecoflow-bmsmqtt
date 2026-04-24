@@ -1,7 +1,7 @@
 class ApiConstants {
   ApiConstants._();
 
-  static const String baseUrl = 'https://api.ecoflow.com';
+  static const String baseUrl = 'https://api-e.ecoflow.com';
   static const String loginPath = '/auth/login';
   static const String certPath = '/iot-auth/app/certification';
 

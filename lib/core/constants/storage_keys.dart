@@ -4,6 +4,9 @@ class StorageKeys {
   // SharedPreferences (non-sensitive)
   static const String userId = 'userId';
   static const String serialNumber = 'serialNumber';
+  static const String mqttHost = 'mqttHost';
+  static const String mqttPort = 'mqttPort';
+  static const String mqttProtocol = 'mqttProtocol';
 
   // FlutterSecureStorage (sensitive)
   static const String email = 'email';

@@ -18,6 +18,17 @@ class StorageService {
   Future<void> setSerialNumber(String v) =>
       _prefs.setString(StorageKeys.serialNumber, v);
 
+  String? get mqttHost => _prefs.getString(StorageKeys.mqttHost);
+  Future<void> setMqttHost(String v) =>
+      _prefs.setString(StorageKeys.mqttHost, v);
+
+  int? get mqttPort => _prefs.getInt(StorageKeys.mqttPort);
+  Future<void> setMqttPort(int v) => _prefs.setInt(StorageKeys.mqttPort, v);
+
+  String? get mqttProtocol => _prefs.getString(StorageKeys.mqttProtocol);
+  Future<void> setMqttProtocol(String v) =>
+      _prefs.setString(StorageKeys.mqttProtocol, v);
+
   // ── FlutterSecureStorage (sensitive) ────────────────────────────────────────
 
   Future<String?> getEmail() => _secure.read(key: StorageKeys.email);
