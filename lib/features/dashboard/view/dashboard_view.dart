@@ -7,6 +7,7 @@ import '../../../core/models/device_telemetry_model.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../features/auth/viewmodel/auth_viewmodel.dart';
 import '../../../services/mqtt_service.dart';
+import '../../../services/storage_service.dart';
 import '../viewmodel/dashboard_viewmodel.dart';
 import 'widgets/idle_banner.dart';
 import 'widgets/kpi_card.dart';
@@ -87,11 +88,31 @@ class _DashboardBody extends StatelessWidget {
         ],
       ),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.link_off),
-          tooltip: 'Disconnect MQTT',
-          onPressed: () async {
-            await context.read<MqttService>().disconnect();
+        Selector<MqttService, MqttConnectionState>(
+          selector: (_, s) => s.connectionState,
+          builder: (context, state, __) {
+            final isConnected = state == MqttConnectionState.connected;
+            final isConnecting = state == MqttConnectionState.connecting;
+            return IconButton(
+              icon: Icon(isConnected ? Icons.link_off : Icons.link),
+              tooltip: isConnected ? 'Disconnect MQTT' : 'Reconnect MQTT',
+              onPressed: isConnecting
+                  ? null
+                  : () async {
+                      final mqtt = context.read<MqttService>();
+                      final storage = context.read<StorageService>();
+                      if (isConnected) {
+                        await mqtt.disconnect();
+                      } else {
+                        final sn = storage.serialNumber;
+                        if (sn != null && sn.isNotEmpty) {
+                          try {
+                            await mqtt.connect(sn);
+                          } catch (_) {}
+                        }
+                      }
+                    },
+            );
           },
         ),
         IconButton(
